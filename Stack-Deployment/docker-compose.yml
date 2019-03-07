@@ -1,0 +1,182 @@
+# This YML file will deploy the docker images in Swarm mode in multi cluster env.
+
+version: "3.5"
+services:
+  eureka-server:
+    # replace username/repo:tag with your name and image details
+    image: dockersuvendu/eureka-server:latest
+    hostname: discovery-server
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 60s
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 200M
+    ports:
+      - "8761:8761"
+    environment:
+       - SPRING_APPLICATION_NAME=eureka-server
+       - SPRING_PROFILES_ACTIVE=dev
+    networks:
+       services-network-01:
+         aliases:
+            - discovery-server
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+         
+  ################################################################    
+               
+  user-registration-service:
+    # replace username/repo:tag with your name and image details
+    image: dockersuvendu/user-registration:latest
+    hostname: user-registration-service
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 60s
+      resources:
+        limits:
+          cpus: "0.15"
+          memory: 100M
+      # service update configuration
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: continue
+        monitor: 60s
+        max_failure_ratio: 0.3
+    ports:
+      - "8081:8081"
+    environment:
+       - SPRING_APPLICATION_NAME=user-registration-service
+       - SPRING_PROFILES_ACTIVE=dev
+    networks:
+      services-network-01:
+         aliases:
+           - user-registration-service
+    depends_on:
+      - eureka-server
+      - database-service
+    deploy:
+      placement:
+        constraints: [node.role == worker]
+        
+  ################################################################    
+  
+  user-search-delete-service:
+    # replace username/repo:tag with your name and image details
+    image: dockersuvendu/user-search-delete:latest
+    hostname: user-search-delete-service
+    deploy:
+      replicas: 1
+       # service restart policy
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 60s
+      resources:
+        limits:
+          cpus: "0.15"
+          memory: 100M
+    # service update configuration
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: continue
+        monitor: 60s
+        max_failure_ratio: 0.3
+    ports:
+      - "8082:8082"
+    environment:
+       - SPRING_APPLICATION_NAME=user-search-delete-service
+       - SPRING_PROFILES_ACTIVE=dev
+    networks:
+      services-network-01:
+          aliases:
+            - user-search-delete-service
+    depends_on:
+      - eureka-server
+      - database-service
+    deploy:
+       # placement constraint - in this case on 'worker' nodes only
+      placement:
+        constraints: [node.role == worker]              
+        
+  ################################################################    
+  
+  database-service:
+    # replace username/repo:tag with your name and image details
+    image: dockersuvendu/mysql-db:latest
+    hostname: db-server
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 60s
+      resources:
+        limits:
+          cpus: "0.15"
+          memory: 100M
+    ports:
+      - "3306:3306"
+    environment:
+       - MYSQL_ROOT_PASSWORD=mandal01
+       - MYSQL_DATABASE=WEBUSERDB
+       - SPRING_PROFILES_ACTIVE=dev
+    networks:
+      services-network-01:
+         aliases:
+           - database-service
+    deploy:
+      placement:
+        constraints: [node.role == manager]  
+          
+  ################################################################    
+        
+  zuul-api-gateway-service:
+    # replace username/repo:tag with your name and image details
+    image: dockersuvendu/zuul-api-gateway-server:latest
+    hostname: zuul-api-gateway-server
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 60s
+      resources:
+        limits:
+          cpus: "0.15"
+          memory: 100M
+    ports:
+      - "8762:8762"
+    environment:
+       - SPRING_APPLICATION_NAME=zuul-api-gateway-server
+       - SPRING_PROFILES_ACTIVE=dev
+    networks:
+      services-network-01:
+         aliases:
+           - zuul-api-gateway-server
+    depends_on:
+      - eureka-server
+    deploy:
+      placement:
+        constraints: [node.role == worker]    
+
+networks:
+  services-network-01:
+    name: services-network-01
+    driver: overlay
+           
